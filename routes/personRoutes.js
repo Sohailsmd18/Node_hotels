@@ -1,20 +1,31 @@
-const express = require('express');  // Corrected to require express, not mongoose
-const router = express.Router();  // Corrected to use Router with a capital 'R'
+const express = require('express');
+const router = express.Router();
 const Person = require('./../models/Person');
+const { jwtAuthMiddleware, generateToken } = require('./../jwt');
 
 // POST route to add person
-router.post('/Person', async function(req, res) {
+router.post('/signup', async function (req, res) {
     try {
         const data = req.body; // Assuming the request body contains the necessary data
-        
+
         // Create a new person document using the Mongoose model
         const newPerson = new Person(data);
-        
+
         // Save the person document and wait for the operation to complete
         const savedPerson = await newPerson.save();
-        
+
         console.log("Data saved successfully");
-        res.status(200).json(savedPerson);
+
+        const payload = {
+            id: savedPerson._id,  // Corrected to use savedPerson
+            username: savedPerson.username
+        };
+
+        console.log(JSON.stringify(payload));
+        const token = generateToken({ username: savedPerson.username }); // Correct token generation
+
+        console.log("Token is:", token);
+        res.status(200).json({ response: savedPerson, token: token }); // Correct response object
     } catch (error) {
         console.log("Error saving person", error);
         res.status(500).json({ error: 'Internal server error' });
@@ -22,7 +33,7 @@ router.post('/Person', async function(req, res) {
 });
 
 // GET method to get all persons
-router.get('/Person', async function(req, res) {
+router.get('/Person', async function (req, res) {
     try {
         const data = await Person.find();
         console.log("Data fetched");
@@ -50,20 +61,45 @@ router.get('/Person/:workType', async (req, res) => {
     }
 });
 
+router.post('/login',async (req,res)=>{
+    try{
+        //Extract user name body from the request body
+        const{username,password}=req.body;
+        //Find the user by username
+        const user=await Person.findOne({username:username});
+
+    //If user or password doesnt match return error
+    if(!user||!(await user.comparePassword(password))){
+        return res.status(401).json({error:'Invalid username or password'});
+    }
+    //Generate token
+    const payload={
+        id:user.id,
+        username:user.username
+    }
+    const token =generateToken(payload);
+    //return token as response
+    res.json({token});
+
+    }catch(err){
+        console.log(err);
+        res.status(500).json({error:'Internal server error'});
+    }
+});
 router.put('/:id', async (req, res) => {
     try {
         const personId = req.params.id;
         const updatedPerson = req.body;
-        
+
         const response = await Person.findByIdAndUpdate(personId, updatedPerson, {
             new: true, // Return the updated document
             runValidators: true // Run Mongoose validation
         });
-        
+
         if (!response) {
             return res.status(404).json({ error: "Person not found" });
         }
-        
+
         console.log("Data updated");
         res.status(200).json(response);
     } catch (err) {
@@ -72,5 +108,5 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-//exporting this code
+// exporting this code
 module.exports = router;
